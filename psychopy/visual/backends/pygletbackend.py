@@ -465,7 +465,8 @@ class PygletBackend(BaseBackend):
                 rampSize=self._rampSize,
                 driver=self._driver,
                 xDisplay=self.xDisplay,
-                gammaErrorPolicy=self._gammaErrorPolicy
+                gammaErrorPolicy=self._gammaErrorPolicy,
+                win=self.win
             )
 
     @attributeSetter

@@ -49,16 +49,18 @@ warn_msg = problem_msg + 'Proceeding without look-up table (gamma) changes.'
 
 
 def setGamma(screenID=None, newGamma=1.0, rampType=None, rampSize=None,
-    driver=None, xDisplay=None, gammaErrorPolicy=None):
+    driver=None, xDisplay=None, gammaErrorPolicy=None, win=None):
     """Sets gamma to a given value
 
     :param screenID: The screen ID in the Operating system
-    :param newGamma: numeric or triplet (for independent RGB gamma vals)
+    :param newGamma: numeric, triplet (for independent RGB gamma vals), or 'interp'
     :param rampType: see :ref:`createLinearRamp` for possible ramp types
     :param rampSize: how large is the lookup table on your system?
     :param driver: string describing your gfx card driver (e.g. from pyglet)
     :param xDisplay: for linux only
     :param gammaErrorPolicy: whether you want to raise an error or warning
+    :param win: current window used by the backend. This is used to return
+                the calibration luminance values and do interpolaton.
     :return:
     """
     if not gammaErrorPolicy:
@@ -71,16 +73,53 @@ def setGamma(screenID=None, newGamma=1.0, rampType=None, rampSize=None,
         newGamma.shape = [3, 1]
     elif type(newGamma) is numpy.ndarray:
         newGamma.shape = [3, 1]
+
+
     # create LUT from gamma values
     newLUT = numpy.tile(
         createLinearRamp(rampType=rampType, rampSize=rampSize, driver=driver),
         (3, 1)
     )
-    if numpy.all(newGamma == 1.0) == False:
+
+    # in case we want a linear interpolation, we get the current
+    # monitor calibration data and we use it to calculate the 
+    # interpolated ramp
+    if type(newGamma)==str and win is not None:
+        if newGamma == 'interp':
+            logging.info('Setting the gamma ramp as linear interpolation')
+            print('Setting the gamma ramp as linear interpolation')
+            levelsPre = win.monitor.getLevelsPre()
+            lumsPre = win.monitor.getLumsPre()
+            
+            newLUT = numpy.zeros(newLUT.shape)
+
+            for gun in range(3):
+                x = numpy.linspace(numpy.min(lumsPre[gun+1, :]), 
+                                   numpy.max(lumsPre[gun+1, :]), 
+                                   newLUT.shape[1]) 
+                                  # length depends on newLUT, which depends
+                                  # on driver, etc.
+
+                # computing the interpolation of the inverse
+                y = numpy.interp(x, xp=lumsPre[gun+1, :], fp=levelsPre)
+                
+                # normalizing to max and saving to array
+                newLUT[gun, :] = y/newLUT.shape[1]
+        else:
+            logging.error("Invalid string, gamma can be a " + 
+                          "single value, a triplet, or the " + 
+                          "string 'interp'")
+                
+
+    elif numpy.all(newGamma == 1.0) == False:
+        # computing the inverse of gamma to effectively linearize
         # correctly handles 1 or 3x1 gamma vals
         newLUT = newLUT**(1.0/numpy.array(newGamma))
+
     setGammaRamp(screenID, newLUT,
                  xDisplay=xDisplay, gammaErrorPolicy=gammaErrorPolicy)
+    
+
 
 
 def setGammaRamp(screenID, newRamp, nAttempts=3, xDisplay=None,
@@ -92,7 +131,6 @@ def setGammaRamp(screenID, newRamp, nAttempts=3, xDisplay=None,
     parameter nAttemps allows the user to determine how many attempts should
     be made before failing
     """
-
     if not gammaErrorPolicy:
         gammaErrorPolicy = defaultGammaErrorPolicy
 

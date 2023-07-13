@@ -285,7 +285,10 @@ class Monitor:
         """Returns just the gamma value (not the whole grid)
         """
         gridInCurrent = 'gammaGrid' in self.currentCalib
-        if (gridInCurrent and
+        
+        if type(self.currentCalib['gamma'])==str:
+            return self.currentCalib['gamma']
+        elif (gridInCurrent and
                 not np.alltrue(self.getGammaGrid()[1:, 2] == 1)):
             return self.getGammaGrid()[1:, 2]
         elif 'gamma' in self.currentCalib:
